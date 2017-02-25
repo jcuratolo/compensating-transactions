@@ -1,0 +1,122 @@
+<html>
+
+<head></head>
+
+<body>
+    <script>
+            class Transaction {
+                static executeSeries () {
+                    var history = [];
+                    var progress = [];
+                    var transactions = Array.prototype.slice.call(arguments);
+                    var report = {
+                        errors: [],
+                        history: history,
+                        sequence: Array.prototype.slice.call(arguments)
+                    }
+
+                    try {
+                        while (transactions.length) {
+                            var current = transactions.shift();
+                            current.do();
+                            history.push(current);
+                            progress.push(current);
+                        }
+                    } catch (e) {
+                        report.errors.push(e);
+                        while (history.length) {
+                            try {
+                                history.pop().undo();                            
+                            } catch (e) {
+                                report.errors.push(e);
+                            }
+                        }
+                    }
+                    
+                    return report;
+                }
+
+                static executeSeriesAsync () {
+                    var transactions = Array.prototype.slice.call(arguments);
+                    var executed = [];
+                    var startSeries;
+                    var chain = new Promise(function (resolve) {
+                        startSeries = resolve;
+                    });
+
+                    transactions.forEach(function (transaction) {
+                        chain = chain
+                            .then(transaction.do)
+                            .then(function () {
+                                executed.push(transaction);
+                            });
+                    });
+
+                    chain.catch(function (error) {
+                        console.error(error);
+
+                        var transactions = executed.reverse();
+                        var startUndo;
+                        var chain = new Promise(function (resolve) {
+                            startUndo = resolve;
+                        });
+
+                        transactions.forEach(function (transaction) {
+                            chain = chain.then(transaction.undo)
+                        });
+
+                        startUndo();
+                    });
+
+                    startSeries();
+                }
+            }
+
+            // var report = Transaction.executeSeries(
+            //     {
+            //         name: "first",
+            //         do: function () { console.log("do1") },
+            //         undo: function () { console.log("undo1"); throw "Undo 1 had an error!" }
+            //     }, 
+            //     {
+            //         name: "second",
+            //         do: function () { console.log("do2") },
+            //         undo: function () { console.log("undo2")}
+            //     }, 
+            //     {
+            //         name: "third",
+            //         do: function () { console.log("do3"); throw "Do 3 had an error!" },
+            //         undo: function () { console.log("undo3") }
+            //     }
+            // );
+
+            // console.log(report);
+
+            Transaction.executeSeriesAsync(
+                {
+                    do: hi(1),
+                    undo: hi("undo 1")
+                },
+                {
+                    do: hi(2),
+                    undo: hi("undo 2")
+                },
+                {
+                    do: function () { hi(3); throw "DAMMMMMMNNN"}
+                }
+            );
+
+            function hi (message) {
+                return function () {
+                    return new Promise(function (res) {
+                        setTimeout(function () {
+                            console.log(message);
+                            res();                        
+                        }, 500);
+                    })
+                }
+            }
+        </script>
+</body>
+
+</html>
